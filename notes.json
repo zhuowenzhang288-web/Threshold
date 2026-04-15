@@ -1,0 +1,42 @@
+[
+  {
+    "id": "1",
+    "title": "欢迎来到我的学习笔记",
+    "content": "这是我的个人学习笔记网站，在这里我会记录各种学习心得和技术笔记。\n\n## 关于这个网站\n\n这个网站参考了 detect.wiki 的设计风格，简洁优雅，专注于内容的展示。\n\n## 功能特点\n\n- 笔记列表展示\n- 标签分类\n- 分类管理\n- 管理员上传功能\n\n希望你能在这里找到有价值的内容！",
+    "summary": "这是我的个人学习笔记网站，在这里我会记录各种学习心得和技术笔记。希望你能在这里找到有价值的内容！",
+    "createdAt": "2025-04-15",
+    "updatedAt": "2025-04-15",
+    "tags": [
+      "随笔",
+      "介绍"
+    ],
+    "category": "随笔"
+  },
+  {
+    "id": "2",
+    "title": "React 学习笔记",
+    "content": "React 是一个用于构建用户界面的 JavaScript 库。\n\n## 核心概念\n\n### 组件\n组件是 React 的基本构建块，可以是函数组件或类组件。\n\n### Props\nProps 是组件之间传递数据的方式。\n\n### State\nState 用于管理组件内部的状态。\n\n## Hooks\n\n- useState\n- useEffect\n- useContext\n- useReducer",
+    "summary": "React 是一个用于构建用户界面的 JavaScript 库。本文介绍了 React 的核心概念，包括组件、Props、State 以及常用的 Hooks。",
+    "createdAt": "2025-04-14",
+    "updatedAt": "2025-04-14",
+    "tags": [
+      "React",
+      "前端",
+      "JavaScript"
+    ],
+    "category": "技术"
+  },
+  {
+    "id": "3",
+    "title": "TypeScript 进阶",
+    "content": "TypeScript 是 JavaScript 的超集，添加了类型系统。\n\n## 高级类型\n\n### 泛型\n泛型允许我们编写灵活的、可重用的代码。\n\n### 类型推断\nTypeScript 可以自动推断类型。\n\n### 类型守卫\n类型守卫用于在运行时检查类型。",
+    "summary": "TypeScript 是 JavaScript 的超集，添加了类型系统。本文介绍了泛型、类型推断、类型守卫等高级特性。",
+    "createdAt": "2025-04-13",
+    "updatedAt": "2025-04-13",
+    "tags": [
+      "TypeScript",
+      "前端"
+    ],
+    "category": "技术"
+  }
+]
