@@ -1,5 +1,20 @@
 [
   {
+    "id": "1713489600001",
+    "title": "Representation Theory Notes",
+    "summary": "📄 PDF Document - Representation Theory learning notes",
+    "createdAt": "2025-04-19",
+    "updatedAt": "2025-04-19",
+    "tags": [
+      "数学",
+      "表示论",
+      "基础数学"
+    ],
+    "category": "基础数学",
+    "type": "pdf",
+    "fileUrl": "https://raw.githubusercontent.com/zhuowenzhang288-web/Threshold/main/pdfs/1713489600000_Representation_Theory_Notes.pdf"
+  },
+  {
     "id": "1",
     "title": "欢迎来到 Threshold",
     "content": "这是我的个人学习笔记网站，专注于记录人工智能、基础数学与个人成长的学习心得。\n\n## 关于这个网站\n\n在这里，你可以找到关于基础数学、AI、个人感悟的文章。\n\n## 功能特点\n\n- 支持 Markdown 笔记\n- 支持 PDF 上传和在线预览\n- 标签分类\n- 搜索功能\n\nNo map, no plan, no worries.",
