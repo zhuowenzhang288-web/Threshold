@@ -53,17 +53,37 @@ async function init() {
 async function uploadPDFToGitHub(file) {
   const token = getGitHubToken();
   if (!token) {
-    showToast('Token error');
+    showToast('Token decode error - please contact admin');
+    console.error('Token is null');
     return null;
   }
   
   return new Promise((resolve) => {
     const reader = new FileReader();
+    
+    reader.onerror = function() {
+      showToast('File read error');
+      console.error('FileReader error:', reader.error);
+      resolve(null);
+    };
+    
     reader.onload = async function(e) {
-      const base64 = e.target.result.split(',')[1];
-      const filename = `${Date.now()}_${file.name}`;
-      
       try {
+        // Extract base64 from data URL (remove "data:application/pdf;base64," prefix)
+        const dataUrl = e.target.result;
+        const base64 = dataUrl.split(',')[1];
+        
+        if (!base64) {
+          showToast('File encoding error');
+          resolve(null);
+          return;
+        }
+        
+        const filename = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+        
+        showToast('Uploading PDF to GitHub...');
+        console.log('Uploading PDF:', filename, 'Size:', file.size);
+        
         const url = `https://api.github.com/repos/${GITHUB_REPO}/contents/${GITHUB_PDFS_DIR}/${filename}`;
         const response = await fetch(url, {
           method: 'PUT',
@@ -80,17 +100,21 @@ async function uploadPDFToGitHub(file) {
         
         if (response.ok) {
           const data = await response.json();
+          console.log('Upload successful:', data.content.download_url);
           resolve(data.content.download_url);
         } else {
-          const error = await response.json();
-          showToast('PDF upload failed: ' + error.message);
+          const errorText = await response.text();
+          console.error('GitHub API error:', response.status, errorText);
+          showToast('Upload failed: ' + response.status);
           resolve(null);
         }
       } catch (error) {
+        console.error('Upload exception:', error);
         showToast('Upload error: ' + error.message);
         resolve(null);
       }
     };
+    
     reader.readAsDataURL(file);
   });
 }
@@ -571,15 +595,22 @@ async function uploadPDF(file) {
     return;
   }
 
-  document.getElementById('pdf-upload-status').classList.remove('hidden');
-  document.getElementById('pdf-preview-name').classList.add('hidden');
+  console.log('Starting PDF upload:', file.name, 'Size:', file.size);
+  showToast('Starting PDF upload...');
+
+  const statusEl = document.getElementById('pdf-upload-status');
+  const previewEl = document.getElementById('pdf-preview-name');
+  
+  if (statusEl) statusEl.classList.remove('hidden');
+  if (previewEl) previewEl.classList.add('hidden');
   
   const url = await uploadPDFToGitHub(file);
   
-  document.getElementById('pdf-upload-status').classList.add('hidden');
+  if (statusEl) statusEl.classList.add('hidden');
   
   if (url) {
     uploadedPDFUrl = url;
+    console.log('PDF uploaded successfully:', url);
     document.getElementById('pdf-preview-name').classList.remove('hidden');
     document.getElementById('pdf-filename').textContent = file.name;
     showToast('PDF uploaded!');
