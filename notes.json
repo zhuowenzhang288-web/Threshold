@@ -1,5 +1,20 @@
 [
   {
+    "id": "1776588007712",
+    "title": "pku暑假学校代数数论讲义",
+    "category": "基础数学",
+    "tags": [
+      "代数数论",
+      "Tate thesis",
+      "薛航"
+    ],
+    "createdAt": "2026-04-19",
+    "updatedAt": "2026-04-19",
+    "type": "pdf",
+    "fileUrl": "https://raw.githubusercontent.com/zhuowenzhang288-web/Threshold/main/pdfs/1776587986830__________.pdf",
+    "summary": "📄 PDF Document"
+  },
+  {
     "id": "1776584065330",
     "title": "机器学习 CS229",
     "category": "人工智能",
