@@ -1,16 +1,5 @@
 [
   {
-    "id": "1776581187663",
-    "title": "Test Note",
-    "category": "Test",
-    "tags": [],
-    "createdAt": "2026-04-19",
-    "updatedAt": "2026-04-19",
-    "type": "markdown",
-    "content": "This is a test note content.",
-    "summary": "This is a test note content...."
-  },
-  {
     "id": "1713489600001",
     "title": "Representation Theory Notes",
     "summary": "📄 PDF Document - Representation Theory learning notes",
