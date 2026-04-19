@@ -1,5 +1,16 @@
 [
   {
+    "id": "1776584065330",
+    "title": "机器学习 CS229",
+    "category": "人工智能",
+    "tags": [],
+    "createdAt": "2026-04-19",
+    "updatedAt": "2026-04-19",
+    "type": "pdf",
+    "fileUrl": "https://raw.githubusercontent.com/zhuowenzhang288-web/Threshold/main/pdfs/1776583925036_CS229______________Final.pdf",
+    "summary": "📄 PDF Document"
+  },
+  {
     "id": "1713489600001",
     "title": "Representation Theory Notes",
     "summary": "📄 PDF Document - Representation Theory learning notes",
