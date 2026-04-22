@@ -19,20 +19,25 @@
       background-attachment: fixed;
     }
     .parallax-bg {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100vh;
-      background-image: url('bg.jpg');
-      background-size: cover;
-      background-position: center;
-      z-index: -1;
-      filter: blur(0px);
-      transition: filter 0.3s ease;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      min-width: 100%;
+      min-height: 100%;
+      width: auto;
+      height: auto;
+      transform: translate(-50%, -50%);
+      object-fit: cover;
+      z-index: 0;
     }
-    .parallax-bg.blurred {
-      filter: blur(8px) brightness(0.7);
+    .main-bg {
+      position: relative;
+      min-height: 100vh;
+    }
+    #mainContent > div,
+    #mainContent > section {
+      position: relative;
+      z-index: 2;
     }
     .note-card:hover {
       transform: translateY(-2px);
@@ -71,12 +76,28 @@
     }
   </style>
 </head>
-<body class="bg-gray-50">
-  <!-- Parallax Background -->
-  <div class="parallax-bg" id="parallaxBg"></div>
-  
+<body style="margin:0;padding:0;">
+  <!-- Video Background - Global Fixed -->
+  <video id="globalVideoBg" autoplay muted loop playsinline webkit-playsinline
+    style="position:fixed;top:0;left:0;min-width:100vw;min-height:100vh;width:100vw;height:100vh;object-fit:cover;z-index:0;">
+    <source src="bg.mp4" type="video/mp4">
+  </video>
+  <!-- Minimal overlay -->
+  <div style="position:fixed;inset:0;background:rgba(0,0,0,0.05);z-index:0;pointer-events:none;"></div>
+  <script>
+    (function() {
+      var v = document.getElementById('globalVideoBg');
+      if (!v) return;
+      function tryPlay() { var p = v.play(); if (p && p.catch) p.catch(function(){}); }
+      tryPlay();
+      v.addEventListener('loadeddata', tryPlay);
+      document.addEventListener('touchstart', tryPlay, {once:true});
+      document.addEventListener('click', tryPlay, {once:true});
+    })();
+  </script>
+
   <!-- Navigation -->
-  <nav class="sticky top-0 z-50 bg-white/95 backdrop-blur border-b border-gray-200">
+  <nav class="sticky top-0 z-50 text-white" style="background:rgba(0,0,0,0.15);backdrop-filter:blur(4px);border-bottom:1px solid rgba(255,255,255,0.1);">
     <div class="container mx-auto px-4">
       <div class="flex items-center justify-between h-14">
         <a href="#" onclick="showHome()" class="flex items-center gap-2 font-semibold text-lg">
@@ -84,37 +105,37 @@
           <span>Threshold</span>
         </a>
         <div class="hidden md:flex items-center gap-1">
-          <a href="#" onclick="showHome()" class="px-3 py-2 text-sm rounded-md hover:bg-gray-100 transition">Home</a>
-          <a href="#" onclick="showArchives()" class="px-3 py-2 text-sm rounded-md hover:bg-gray-100 transition">Archives</a>
-          <a href="#" onclick="showTags()" class="px-3 py-2 text-sm rounded-md hover:bg-gray-100 transition">Tags</a>
-          <a href="#" onclick="showCategories()" class="px-3 py-2 text-sm rounded-md hover:bg-gray-100 transition">Categories</a>
-          <a href="#" onclick="showAbout()" class="px-3 py-2 text-sm rounded-md hover:bg-gray-100 transition">About</a>
+          <a href="#" onclick="showHome()" class="px-3 py-2 text-sm rounded-md hover:bg-white/20 transition">Home</a>
+          <a href="#" onclick="showArchives()" class="px-3 py-2 text-sm rounded-md hover:bg-white/20 transition">Archives</a>
+          <a href="#" onclick="showTags()" class="px-3 py-2 text-sm rounded-md hover:bg-white/20 transition">Tags</a>
+          <a href="#" onclick="showCategories()" class="px-3 py-2 text-sm rounded-md hover:bg-white/20 transition">Categories</a>
+          <a href="#" onclick="showAbout()" class="px-3 py-2 text-sm rounded-md hover:bg-white/20 transition">About</a>
         </div>
         <div class="flex items-center gap-2">
-          <button onclick="showSearch()" class="p-2 hover:bg-gray-100 rounded-md transition" title="Search">
+          <button onclick="showSearch()" class="p-2 hover:bg-white/20 rounded-md transition" title="Search">
             <i class="fas fa-search"></i>
           </button>
-          <button onclick="showAdmin()" class="p-2 hover:bg-gray-100 rounded-md transition">
+          <button onclick="showAdmin()" class="p-2 hover:bg-white/20 rounded-md transition">
             <i class="fas fa-user"></i>
           </button>
-          <button class="md:hidden p-2 hover:bg-gray-100 rounded-md transition" onclick="toggleMobileMenu()">
+          <button class="md:hidden p-2 hover:bg-white/20 rounded-md transition" onclick="toggleMobileMenu()">
             <i class="fas fa-bars"></i>
           </button>
         </div>
       </div>
       <!-- Mobile Menu -->
-      <div id="mobileMenu" class="hidden md:hidden pb-4">
-        <a href="#" onclick="showHome(); toggleMobileMenu()" class="block px-4 py-3 text-sm hover:bg-gray-100 rounded-md">Home</a>
-        <a href="#" onclick="showArchives(); toggleMobileMenu()" class="block px-4 py-3 text-sm hover:bg-gray-100 rounded-md">Archives</a>
-        <a href="#" onclick="showTags(); toggleMobileMenu()" class="block px-4 py-3 text-sm hover:bg-gray-100 rounded-md">Tags</a>
-        <a href="#" onclick="showCategories(); toggleMobileMenu()" class="block px-4 py-3 text-sm hover:bg-gray-100 rounded-md">Categories</a>
-        <a href="#" onclick="showAbout(); toggleMobileMenu()" class="block px-4 py-3 text-sm hover:bg-gray-100 rounded-md">About</a>
+      <div id="mobileMenu" class="hidden md:hidden pb-4" style="background:rgba(0,0,0,0.4);backdrop-filter:blur(8px);">
+        <a href="#" onclick="showHome(); toggleMobileMenu()" class="block px-4 py-3 text-sm hover:bg-white/20 rounded-md">Home</a>
+        <a href="#" onclick="showArchives(); toggleMobileMenu()" class="block px-4 py-3 text-sm hover:bg-white/20 rounded-md">Archives</a>
+        <a href="#" onclick="showTags(); toggleMobileMenu()" class="block px-4 py-3 text-sm hover:bg-white/20 rounded-md">Tags</a>
+        <a href="#" onclick="showCategories(); toggleMobileMenu()" class="block px-4 py-3 text-sm hover:bg-white/20 rounded-md">Categories</a>
+        <a href="#" onclick="showAbout(); toggleMobileMenu()" class="block px-4 py-3 text-sm hover:bg-white/20 rounded-md">About</a>
       </div>
     </div>
   </nav>
 
   <!-- Main Content -->
-  <main id="mainContent">
+  <main id="mainContent" class="main-bg">
     <!-- Content will be dynamically loaded here -->
   </main>
 
