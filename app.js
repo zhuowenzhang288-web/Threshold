@@ -1,21 +1,60 @@
 // Data Management
 const ADMIN_HASH = 'd2Vud2VuMTIz'; // Base64 encoded password: wenwen123
-const GITHUB_TOKEN_HASH = 'Z2hwX2xVMnJpWG1DeXc4cE81WFZONzdyY216N2tpSlpyUTFGMXdvTQ=='; // GitHub Token
 const GITHUB_REPO = 'zhuowenzhang288-web/Threshold';
 const GITHUB_FILE = 'notes.json';
 const GITHUB_PDFS_DIR = 'pdfs';
 
-// Decode GitHub Token
+let notes = [];
+let isAdmin = false;
+let cachedSHA = null; // Cache GitHub file SHA to avoid extra requests
+
+// Token management: read from localStorage
 function getGitHubToken() {
-  try {
-    return atob(GITHUB_TOKEN_HASH);
-  } catch {
-    return null;
+  return localStorage.getItem('github_token') || '';
+}
+
+function setGitHubToken(token) {
+  if (token) {
+    localStorage.setItem('github_token', token);
+  } else {
+    localStorage.removeItem('github_token');
   }
 }
 
-let notes = [];
-let isAdmin = false;
+function hasGitHubToken() {
+  return !!getGitHubToken();
+}
+
+function saveGitHubToken() {
+  const input = document.getElementById('githubTokenInput');
+  const token = input.value.trim();
+  if (!token) {
+    showToast('Please enter a token');
+    return;
+  }
+  if (!token.startsWith('ghp_') && !token.startsWith('github_pat_')) {
+    showToast('Invalid token format. Should start with ghp_');
+    return;
+  }
+  setGitHubToken(token);
+  showToast('GitHub Token saved!');
+  showAdminPanel();
+}
+
+function clearGitHubToken() {
+  setGitHubToken('');
+  showToast('GitHub Token cleared');
+  showAdminPanel();
+}
+
+// Verify password
+function verifyPassword(input) {
+  try {
+    return btoa(input) === ADMIN_HASH;
+  } catch {
+    return false;
+  }
+}
 
 // Verify password
 function verifyPassword(input) {
@@ -29,13 +68,19 @@ function verifyPassword(input) {
 // Fetch notes from GitHub
 async function fetchNotesFromGitHub() {
   try {
-    const response = await fetch(`https://raw.githubusercontent.com/${GITHUB_REPO}/main/${GITHUB_FILE}?t=${Date.now()}`);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
+    const response = await fetch(`https://cdn.jsdelivr.net/gh/${GITHUB_REPO}/notes.json?t=${Date.now()}`, {
+      signal: controller.signal
+    });
+    clearTimeout(timeout);
     if (response.ok) {
       notes = await response.json();
+      console.log('[fetchNotesFromGitHub] Loaded', notes.length, 'notes');
       return true;
     }
   } catch (error) {
-    console.error('Failed to fetch notes:', error);
+    console.error('[fetchNotesFromGitHub] Failed:', error);
   }
   return false;
 }
@@ -43,20 +88,24 @@ async function fetchNotesFromGitHub() {
 // Initialize
 async function init() {
   const loaded = await fetchNotesFromGitHub();
-  if (!loaded) {
-    notes = [];
+  if (!loaded || notes.length === 0) {
+    // Use a default welcome note if nothing loaded
+    notes = [{
+      id: 'welcome',
+      title: 'Welcome to Threshold',
+      category: '随笔',
+      tags: ['介绍'],
+      type: 'markdown',
+      content: 'Welcome to your personal learning notes site! Start by logging in and creating your first note.',
+      summary: 'Welcome to your personal learning notes site!',
+      createdAt: new Date().toISOString().split('T')[0]
+    }];
   }
   showHome();
 }
 
 // Upload PDF to GitHub
 async function uploadPDFToGitHub(file) {
-  const token = getGitHubToken();
-  if (!token) {
-    showToast('Token decode error - please contact admin');
-    console.error('Token is null');
-    return null;
-  }
   
   return new Promise((resolve) => {
     const reader = new FileReader();
@@ -88,7 +137,7 @@ async function uploadPDFToGitHub(file) {
         const response = await fetch(url, {
           method: 'PUT',
           headers: {
-            'Authorization': `token ${token}`,
+            'Authorization': `Bearer ${GITHUB_TOKEN}`,
             'Accept': 'application/vnd.github.v3+json',
             'Content-Type': 'application/json'
           },
@@ -119,39 +168,43 @@ async function uploadPDFToGitHub(file) {
   });
 }
 
-// Save notes to GitHub
+// UTF-8 safe base64 encode
+function utf8ToBase64(str) {
+  const utf8Bytes = new TextEncoder().encode(str);
+  let binary = '';
+  for (let i = 0; i < utf8Bytes.length; i++) {
+    binary += String.fromCharCode(utf8Bytes[i]);
+  }
+  return btoa(binary);
+}
+
+// Save notes to GitHub (with SHA cache)
 async function saveNotesToGitHub() {
-  if (!isAdmin) {
-    showToast('Please login first');
-    return false;
-  }
-  
-  const token = getGitHubToken();
-  if (!token) {
-    showToast('Token error');
-    return false;
-  }
+  if (!isAdmin) return false;
   
   try {
-    const shaResponse = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/${GITHUB_FILE}`, {
-      headers: {
-        'Authorization': `token ${token}`,
-        'Accept': 'application/vnd.github.v3+json'
-      }
-    });
+    let sha = cachedSHA;
     
-    let sha = null;
-    if (shaResponse.ok) {
-      const fileData = await shaResponse.json();
-      sha = fileData.sha;
+    // If no cached SHA, fetch it (only first time)
+    if (!sha) {
+      const shaResponse = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/${GITHUB_FILE}`, {
+        headers: {
+          'Authorization': `Bearer ${GITHUB_TOKEN}`,
+          'Accept': 'application/vnd.github.v3+json'
+        }
+      });
+      if (shaResponse.ok) {
+        const fileData = await shaResponse.json();
+        sha = fileData.sha;
+      }
     }
     
-    const content = btoa(unescape(encodeURIComponent(JSON.stringify(notes, null, 2))));
+    const content = utf8ToBase64(JSON.stringify(notes, null, 2));
     
     const updateResponse = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/${GITHUB_FILE}`, {
       method: 'PUT',
       headers: {
-        'Authorization': `token ${token}`,
+        'Authorization': `Bearer ${GITHUB_TOKEN}`,
         'Accept': 'application/vnd.github.v3+json',
         'Content-Type': 'application/json'
       },
@@ -163,13 +216,17 @@ async function saveNotesToGitHub() {
     });
     
     if (updateResponse.ok) {
-      showToast('Saved successfully!');
-      await new Promise(r => setTimeout(r, 2000));
-      await fetchNotesFromGitHub();
+      const result = await updateResponse.json();
+      cachedSHA = result.content.sha; // Update cached SHA
       return true;
+    } else if (updateResponse.status === 409) {
+      // SHA conflict, clear cache and retry once
+      cachedSHA = null;
+      return await saveNotesToGitHub();
     } else {
-      const error = await updateResponse.json();
-      showToast('Save failed: ' + (error.message || 'Unknown error'));
+      let errorMsg = 'HTTP ' + updateResponse.status;
+      try { const error = await updateResponse.json(); errorMsg = error.message || errorMsg; } catch (e) {}
+      showToast('GitHub error: ' + errorMsg);
       return false;
     }
   } catch (error) {
@@ -250,7 +307,7 @@ function showHome() {
   let notesHtml = notes.map(note => {
     const isPDF = note.type === 'pdf';
     return `
-    <div class="note-card bg-white rounded-lg border border-gray-200 p-6 mb-6 transition-all duration-300 cursor-pointer" onclick="showNote('${note.id}')">
+    <div class="note-card backdrop-blur-md rounded-lg border border-white/40 p-6 mb-6 transition-all duration-300 cursor-pointer shadow-lg" style="background:rgba(255,255,255,0.88)" style="background:rgba(255,255,255,0.88)" onclick="showNote('${note.id}')">
       <div class="flex items-center gap-2 text-xs text-gray-500 mb-2">
         <i class="far fa-calendar"></i>
         <span>${note.createdAt}</span>
@@ -272,17 +329,23 @@ function showHome() {
 
   document.getElementById('mainContent').innerHTML = `
     <!-- Hero Section -->
-    <div class="hero-bg relative h-64 md:h-96">
-      <div class="absolute inset-0 bg-black/50 backdrop-blur-sm"></div>
-      <div class="absolute inset-0 flex flex-col items-center justify-center text-white">
-        <i class="fas fa-book-open text-5xl mb-4 opacity-90"></i>
-        <h1 class="text-3xl md:text-4xl font-bold mb-2">Threshold</h1>
-        <p class="text-lg opacity-80">No map, no plan, no worries.</p>
+    <!-- Hero Section -->
+    <div class="relative" style="height: 100vh; min-height: 500px; margin-top: -56px; padding-top: 56px;">
+      <div style="position:absolute;inset:0;background:rgba(0,0,0,0.08);z-index:0;"></div>
+      <div class="relative flex flex-col items-center justify-center text-white" style="z-index:1;height:100%;">
+        <i class="fas fa-book-open text-6xl md:text-7xl mb-6 opacity-90"></i>
+        <h1 class="text-4xl md:text-6xl font-bold mb-4">Threshold</h1>
+        <p class="text-xl md:text-2xl opacity-80">No map, no plan, no worries.</p>
+      </div>
+      <!-- Scroll Down Indicator -->
+      <div class="absolute bottom-8 left-1/2 transform -translate-x-1/2 text-white animate-bounce cursor-pointer" style="z-index:1;" onclick="document.querySelector('.content-section').scrollIntoView({behavior: 'smooth'})">
+        <i class="fas fa-chevron-down text-2xl opacity-60"></i>
       </div>
     </div>
 
     <!-- Main Content -->
-    <div class="container mx-auto px-4 py-8">
+    <div class="content-section" style="position:relative;">
+      <div class="container mx-auto px-4 py-8" style="position:relative;z-index:1;">
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <!-- Notes List -->
         <div class="lg:col-span-2">
@@ -297,7 +360,7 @@ function showHome() {
         <div class="lg:col-span-1">
           <div class="sidebar-sticky space-y-6">
             <!-- Profile -->
-            <div class="bg-white rounded-lg border border-gray-200 p-6">
+            <div class="backdrop-blur-md rounded-lg border border-white/40 shadow-lg p-6" style="background:rgba(255,255,255,0.88)">
               <div class="flex flex-col items-center text-center">
                 <div class="w-20 h-20 rounded-full overflow-hidden mb-4 shadow-md">
                   <img src="bg.jpg" alt="Avatar" class="w-full h-full object-cover">
@@ -313,7 +376,7 @@ function showHome() {
             </div>
 
             <!-- Stats -->
-            <div class="bg-white rounded-lg border border-gray-200 p-6">
+            <div class="backdrop-blur-md rounded-lg border border-white/40 shadow-lg p-6" style="background:rgba(255,255,255,0.88)">
               <h4 class="text-sm font-medium mb-4">Statistics</h4>
               <div class="grid grid-cols-3 gap-4 text-center">
                 <a href="#" onclick="showArchives()" class="group">
@@ -332,7 +395,7 @@ function showHome() {
             </div>
 
             <!-- Recent Posts -->
-            <div class="bg-white rounded-lg border border-gray-200 p-6">
+            <div class="backdrop-blur-md rounded-lg border border-white/40 shadow-lg p-6" style="background:rgba(255,255,255,0.88)">
               <h4 class="text-sm font-medium mb-4">Recent Posts</h4>
               <div class="space-y-3">
                 ${recentNotes.map(note => `
@@ -345,7 +408,7 @@ function showHome() {
             </div>
 
             <!-- Categories -->
-            <div class="bg-white rounded-lg border border-gray-200 p-6">
+            <div class="backdrop-blur-md rounded-lg border border-white/40 shadow-lg p-6" style="background:rgba(255,255,255,0.88)">
               <h4 class="text-sm font-medium mb-4">Categories</h4>
               <div class="space-y-2">
                 ${categories.map(([name, count]) => `
@@ -401,18 +464,27 @@ function showNote(id) {
 
           ${isPDF ? `
             <!-- PDF Preview -->
-            <div class="bg-white rounded-lg border border-gray-200 mb-8 overflow-hidden">
+            <div class="backdrop-blur-md rounded-lg border border-white/40 shadow-lg mb-8 overflow-hidden" style="background:rgba(255,255,255,0.88)">
               <div class="p-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
                 <span class="text-sm font-medium text-gray-700"><i class="fas fa-file-pdf text-red-500 mr-2"></i>PDF Preview</span>
-                <a href="${note.fileUrl}" target="_blank" class="text-sm text-blue-600 hover:text-blue-700"><i class="fas fa-download mr-1"></i>Download</a>
+                <div class="flex gap-3">
+                  <a href="${note.fileUrl}" target="_blank" class="text-sm text-blue-600 hover:text-blue-700"><i class="fas fa-external-link-alt mr-1"></i>Open</a>
+                  <a href="${note.fileUrl}" target="_blank" download class="text-sm text-blue-600 hover:text-blue-700"><i class="fas fa-download mr-1"></i>Download</a>
+                </div>
               </div>
-              <div class="w-full" style="height: 800px;">
-                <iframe src="${note.fileUrl}#toolbar=1&navpanes=1" width="100%" height="100%" style="border: none;"></iframe>
+              <div class="w-full" style="min-height: 500px; background: #f5f5f5;">
+                <embed src="${note.fileUrl}" type="application/pdf" width="100%" height="800px" style="border:none;display:block;" />
+              </div>
+              <div class="p-4 bg-gray-50 border-t border-gray-200">
+                <a href="${note.fileUrl}" target="_blank" class="flex items-center justify-center gap-2 w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium">
+                  <i class="fas fa-eye"></i> View Full PDF
+                </a>
+                <p class="text-xs text-gray-400 text-center mt-2">Tap above if preview is not visible</p>
               </div>
             </div>
           ` : `
             <!-- Markdown Content -->
-            <div class="bg-white rounded-lg border border-gray-200 p-6 mb-8">
+            <div class="backdrop-blur-md rounded-lg border border-white/40 shadow-lg p-6 mb-8" style="background:rgba(255,255,255,0.88)">
               <div class="markdown-content text-gray-700">
                 ${renderContent(note.content)}
               </div>
@@ -435,6 +507,16 @@ function showNote(id) {
   `;
 }
 
+// ========== PDF NAVIGATION HELPERS ==========
+function pdfPrevPage(noteId) {
+  var fn = window['pdfPrevPage_' + noteId];
+  if (fn) fn();
+}
+function pdfNextPage(noteId) {
+  var fn = window['pdfNextPage_' + noteId];
+  if (fn) fn();
+}
+
 // ========== ADMIN PANEL WITH PDF SUPPORT ==========
 let currentTags = [];
 let uploadedPDFUrl = null;
@@ -444,6 +526,8 @@ function showAdminPanel() {
   uploadedPDFUrl = null;
   noteType = 'markdown';
   currentTags = [];
+  const hasToken = hasGitHubToken();
+  const tokenStatus = hasToken ? '<span class="text-green-600 text-sm"><i class="fas fa-check-circle mr-1"></i>Token configured</span>' : '<span class="text-yellow-600 text-sm"><i class="fas fa-exclamation-triangle mr-1"></i>Token required for upload</span>';
 
   document.getElementById('mainContent').innerHTML = `
     <div class="container mx-auto px-4 py-8">
@@ -452,7 +536,27 @@ function showAdminPanel() {
           <i class="fas fa-arrow-left mr-2"></i>Back to Home
         </a>
 
-        <div class="bg-white rounded-lg border border-gray-200 p-6">
+        <!-- GitHub Token Configuration -->
+        <div class="backdrop-blur-md rounded-lg border border-white/40 shadow-lg p-6 mb-6" style="background:rgba(255,255,255,0.88)">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold"><i class="fab fa-github mr-2"></i>GitHub Token</h3>
+            ${tokenStatus}
+          </div>
+          <p class="text-sm text-gray-500 mb-3">
+            To upload PDFs, you need a GitHub Personal Access Token with <code>repo</code> scope.
+            <a href="https://github.com/settings/tokens/new?description=Threshold+Notes&scopes=repo" target="_blank" class="text-blue-600 underline">Create one here</a>
+          </p>
+          <div class="flex gap-2">
+            <input type="password" id="githubTokenInput" placeholder="ghp_xxxxxxxxxxxxxxxx" value="${hasToken ? '••••••••••••••••' : ''}"
+              class="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-mono">
+            <button onclick="saveGitHubToken()" class="px-4 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-900 transition text-sm">
+              <i class="fas fa-save mr-1"></i>Save
+            </button>
+            ${hasToken ? `<button onclick="clearGitHubToken()" class="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition text-sm"><i class="fas fa-trash mr-1"></i>Clear</button>` : ''}
+          </div>
+        </div>
+
+        <div class="backdrop-blur-md rounded-lg border border-white/40 shadow-lg p-6" style="background:rgba(255,255,255,0.88)">
           <h2 class="text-xl font-semibold mb-6">New Note</h2>
           
           <!-- Note Type Selector -->
@@ -511,7 +615,7 @@ function showAdminPanel() {
                 ondragover="event.preventDefault()">
                 <i class="fas fa-cloud-upload-alt text-4xl text-gray-400 mb-3"></i>
                 <p class="text-gray-600 mb-2">Click or drag PDF here</p>
-                <p class="text-sm text-gray-500">Max 10MB</p>
+                <p class="text-sm text-gray-500">Max 50MB</p>
                 <input type="file" id="pdfFile" accept=".pdf" class="hidden" onchange="handlePDFSelect(event)">
               </div>
               <div id="pdf-upload-status" class="mt-3 hidden">
@@ -590,8 +694,8 @@ function handlePDFDrop(event) {
 }
 
 async function uploadPDF(file) {
-  if (file.size > 10 * 1024 * 1024) {
-    showToast('File too large. Max 10MB');
+  if (file.size > 50 * 1024 * 1024) {
+    showToast('File too large. Max 50MB');
     return;
   }
 
@@ -656,13 +760,14 @@ async function saveNote() {
   }
 
   notes.unshift(noteData);
-  const saved = await saveNotesToGitHub();
-  if (saved) {
-    currentTags = [];
-    uploadedPDFUrl = null;
-    showToast('Note published successfully!');
-    showHome();
-  }
+  showHome();
+  currentTags = [];
+  uploadedPDFUrl = null;
+  showToast('Note published!');
+  // Sync to GitHub in background (non-blocking)
+  saveNotesToGitHub().then(saved => {
+    if (saved) console.log('Synced to GitHub');
+  });
 }
 
 // ========== EDIT NOTE ==========
@@ -681,7 +786,7 @@ function showEditNote(id) {
           <i class="fas fa-arrow-left mr-2"></i>Back to Note
         </a>
 
-        <div class="bg-white rounded-lg border border-gray-200 p-6">
+        <div class="backdrop-blur-md rounded-lg border border-white/40 shadow-lg p-6" style="background:rgba(255,255,255,0.88)">
           <h2 class="text-xl font-semibold mb-6">Edit Note</h2>
           <div class="space-y-6">
             <div>
@@ -785,12 +890,12 @@ async function updateNote(id) {
       notes[index].summary = summary || '📄 PDF Document';
     }
 
-    const saved = await saveNotesToGitHub();
-    if (saved) {
-      currentTags = [];
-      showToast('Note updated successfully!');
-      showNote(id);
-    }
+    showHome();
+    showToast('Note updated!');
+    // Sync to GitHub in background (non-blocking)
+    saveNotesToGitHub().then(saved => {
+      if (saved) console.log('Update synced to GitHub');
+    });
   }
 }
 
@@ -798,11 +903,12 @@ async function updateNote(id) {
 async function deleteNote(id) {
   if (confirm('Are you sure you want to delete this note?')) {
     notes = notes.filter(n => n.id !== id);
-    const saved = await saveNotesToGitHub();
-    if (saved) {
-      showToast('Note deleted successfully!');
-      showHome();
-    }
+    showHome();
+    showToast('Note deleted!');
+    // Sync to GitHub in background (non-blocking)
+    saveNotesToGitHub().then(saved => {
+      if (saved) console.log('Delete synced to GitHub');
+    });
   }
 }
 
@@ -874,7 +980,7 @@ function showArchives() {
           ${sortedMonths.map(month => {
             const [year, mon] = month.split('-');
             return `
-              <div class="bg-white rounded-lg border border-gray-200">
+              <div class="backdrop-blur-md rounded-lg border border-white/40 shadow-lg" style="background:rgba(255,255,255,0.88)" style="background:rgba(255,255,255,0.88)">
                 <div class="p-4 border-b border-gray-100">
                   <h2 class="text-lg font-semibold flex items-center gap-2">
                     <i class="far fa-calendar"></i>
@@ -911,7 +1017,7 @@ function showTags() {
           <h1 class="text-2xl font-bold">Tags</h1>
           <span class="text-gray-500">(${tags.length} tags)</span>
         </div>
-        <div class="bg-white rounded-lg border border-gray-200 p-6">
+        <div class="backdrop-blur-md rounded-lg border border-white/40 shadow-lg p-6" style="background:rgba(255,255,255,0.88)">
           <div class="flex flex-wrap gap-2">
             ${tags.map(([tag, count]) => `
               <a href="#" onclick="showTagNotes('${tag}')" class="inline-flex items-center px-3 py-1.5 rounded-full text-sm bg-gray-100 text-gray-700 hover:bg-gray-200 transition">
@@ -937,7 +1043,7 @@ function showCategories() {
         </div>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           ${categories.map(([name, count]) => `
-            <a href="#" onclick="showCategoryNotes('${name}')" class="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition">
+            <a href="#" onclick="showCategoryNotes('${name}')" class="backdrop-blur-md rounded-lg border border-white/40 shadow-lg p-4" style="background:rgba(255,255,255,0.88)" style="background:rgba(255,255,255,0.88)" hover:shadow-md transition">
               <div class="flex items-center justify-between">
                 <div class="flex items-center gap-3">
                   <i class="far fa-folder-open text-gray-400"></i>
@@ -958,7 +1064,7 @@ function showAbout() {
     <div class="container mx-auto px-4 py-8">
       <div class="max-w-2xl mx-auto">
         <h1 class="text-2xl font-bold mb-8">About</h1>
-        <div class="bg-white rounded-lg border border-gray-200 p-6 mb-6">
+        <div class="backdrop-blur-md rounded-lg border border-white/40 shadow-lg p-6 mb-6" style="background:rgba(255,255,255,0.88)">
           <div class="flex flex-col items-center text-center mb-6">
             <div class="w-24 h-24 rounded-full overflow-hidden mb-4">
               <img src="bg.jpg" alt="Avatar" class="w-full h-full object-cover">
@@ -978,7 +1084,7 @@ function showAbout() {
             </a>
           </div>
         </div>
-        <div class="bg-white rounded-lg border border-gray-200 p-6 mb-6">
+        <div class="backdrop-blur-md rounded-lg border border-white/40 shadow-lg p-6 mb-6" style="background:rgba(255,255,255,0.88)">
           <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
             <i class="fas fa-book-open"></i>About This Blog
           </h3>
@@ -989,7 +1095,7 @@ function showAbout() {
             在这里，你可以找到关于基础数学、AI、个人感悟的文章。我希望通过写作来梳理知识体系，同时也希望能与志同道合的朋友一起进步。
           </p>
         </div>
-        <div class="bg-white rounded-lg border border-gray-200 p-6">
+        <div class="backdrop-blur-md rounded-lg border border-white/40 shadow-lg p-6" style="background:rgba(255,255,255,0.88)">
           <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
             <i class="fas fa-code"></i>Focus Areas
           </h3>
@@ -1016,7 +1122,7 @@ function showLogin() {
   document.getElementById('mainContent').innerHTML = `
     <div class="container mx-auto px-4 py-16">
       <div class="max-w-md mx-auto">
-        <div class="bg-white rounded-lg border border-gray-200 p-8">
+        <div class="backdrop-blur-md rounded-lg border border-white/40 shadow-lg p-8" style="background:rgba(255,255,255,0.88)">
           <div class="text-center mb-6">
             <div class="mx-auto w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center mb-4">
               <i class="fas fa-lock text-blue-600 text-xl"></i>
@@ -1059,7 +1165,7 @@ function showCategoryNotes(category) {
 
 function showFilteredNotes(filtered, title) {
   const notesHtml = filtered.map(note => `
-    <div class="note-card bg-white rounded-lg border border-gray-200 p-6 mb-4 transition-all duration-300 cursor-pointer" onclick="showNote('${note.id}')">
+    <div class="note-card backdrop-blur-md rounded-lg border border-white/40 shadow-lg p-6 mb-4 transition-all duration-300 cursor-pointer" style="background:rgba(255,255,255,0.88)" onclick="showNote('${note.id}')">
       <div class="flex items-center gap-2 text-xs text-gray-500 mb-2">
         <i class="far fa-calendar"></i>
         <span>${note.createdAt}</span>
@@ -1103,7 +1209,7 @@ function showSearch() {
         <a href="#" onclick="showHome()" class="inline-flex items-center text-sm text-gray-500 hover:text-gray-700 mb-6">
           <i class="fas fa-arrow-left mr-2"></i>Back to Home
         </a>
-        <div class="bg-white rounded-lg border border-gray-200 p-6 mb-6">
+        <div class="backdrop-blur-md rounded-lg border border-white/40 shadow-lg p-6 mb-6" style="background:rgba(255,255,255,0.88)">
           <h1 class="text-2xl font-bold mb-4"><i class="fas fa-search mr-2"></i>Search</h1>
           <div class="relative">
             <input type="text" id="searchInput" placeholder="Search articles, tags, categories..." 
@@ -1140,7 +1246,7 @@ function performSearch(query) {
   resultsContainer.innerHTML = `
     <div class="mb-4 text-sm text-gray-500">Found ${results.length} result${results.length > 1 ? 's' : ''} for "${query}"</div>
     ${results.map(note => `
-      <div class="note-card bg-white rounded-lg border border-gray-200 p-6 mb-4 cursor-pointer" onclick="showNote('${note.id}')">
+      <div class="note-card backdrop-blur-md rounded-lg border border-white/40 shadow-lg p-6 mb-4 cursor-pointer" style="background:rgba(255,255,255,0.88)" onclick="showNote('${note.id}')">
         <div class="flex items-center gap-2 text-xs text-gray-500 mb-2">
           <i class="far fa-calendar"></i><span>${note.createdAt}</span>
           <span class="text-gray-300">|</span><span class="text-blue-600">${note.category}</span>
